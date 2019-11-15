@@ -1,0 +1,83 @@
+---
+- name: Install Wordpress
+  hosts: serverx
+  remote_user: root
+  vars:
+    ansible_password: redhat
+  tasks:
+    - name: Install all package
+      yum:
+        name:
+          - httpd
+          - mariadb
+          - mariadb-server
+          - php
+          - php-common
+          - php-mysql
+          - php-gd
+          - php-xml
+          - php-mbstring
+          - php-mcrypt
+          - php-xmlrpc
+          - unzip
+          - wget
+        state: present
+    - name: Start http
+      service:
+         name: httpd
+         state: started
+    - name: Start Maria DB
+      service:
+         name: mariadb
+         state: started
+         enabled: yes
+    - name: Start firewall
+      firewalld:
+         service: http
+         permanent: yes
+         immediate: yes
+         state: enabled
+#    - shell: mysqladmin password "abc"
+    - name: Set SQL
+      command: echo "{{ item }}" | mysql -u root -p "abc" 
+      loop:
+         - "DELETE FROM mysql.user WHERE User='';"
+         - "DELETE FROM mysql.user WHERE User='root' AND Host NOT IN ('localhost','127.0.0.1', '::1');"
+         - "DROP DATABASE test;"
+         - "DELETE FROM mysql.db WHERE Db='test' OR Db='test\_%';"
+         - "FLUSH PRIVILEGES;"
+         - "CREATE DATABASE wordpress"
+         - "GRANT ALL PRIVILEGES on wordpress.* to 'ansible'@'localhost' identified by 'mypassword';"
+         - "FLUSH PRIVILEGES;"
+    - name: curl url
+      get_url:
+          url: https://wordpress.org/wordpress-5.0.tar.gz 
+          dest: /tmp
+    - name: unzip
+      unarchive:
+         src: /tmp/wordpress-5.0.tar.gz
+         dest: /var/www/html/
+         remote_src: yes
+    - name: set owner
+      file:
+          path: /var/www/html/wordpress
+          owner: apache
+          group: apache
+          mode: "0755"
+    - name: create dir
+      file:
+          path: /var/www/html/wordpress/wp-content/uploads
+          state: directory
+    - name: set group at upload
+      file:
+          path: /var/www/html/wordpress/wp-content/uploads
+          group: apache
+    - name: copy file
+      copy:
+        src: /var/www/html/wordpress/wp-config-sample.php
+        dest: /var/www/html/wordpress/wp-config.php
+        remote_src: yes
+    - name: remove file
+      file:
+          path: /var/www/html/wordpress/wp-config-sample.php
+          state: absent
